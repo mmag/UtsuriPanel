@@ -25,11 +25,13 @@
                font-family: Roboto, "Helvetica Neue", Arial, sans-serif;
                -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
 
-  #screens { display: flex; height: 100%; overflow-x: auto; overflow-y: hidden;
-             scroll-snap-type: x mandatory; scrollbar-width: none; }
-  #screens::-webkit-scrollbar { display: none; }
-  .screen { flex: 0 0 100vw; height: 100vh; scroll-snap-align: start; scroll-snap-stop: always;
-            position: relative; overflow: hidden; box-sizing: border-box; }
+  /* A ring of screens: only the current one and, while moving, its
+     neighbor are shown, placed with transforms. */
+  #screens { position: relative; height: 100%; overflow: hidden; touch-action: none; }
+  .screen { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; overflow: hidden;
+            box-sizing: border-box; visibility: hidden; will-change: transform; }
+  .screen.shown { visibility: visible; }
+  .screen.moving { transition: transform .35s cubic-bezier(.2, .7, .3, 1); }
 
   /* Music: HagtAmp's display, whole screen pixels per skin pixel. */
   #music { display: flex; flex-direction: column; align-items: center; justify-content: center; }
@@ -297,6 +299,7 @@ function nodeScreen(name) {
     const screen = document.getElementById('node-template').content.firstElementChild.cloneNode(true);
     screensEl.insertBefore(screen, disksScreen);
     nodeScreens[name] = screen;
+    if (index >= screens().indexOf(screen)) index++;  // still the same screen
     updateDots();
   }
   return nodeScreens[name];
@@ -409,18 +412,100 @@ function onFrame(buffer) {
 }
 
 // ---------- Which screen ----------
-// Swipes move between screens. With nothing playing for 15 s the panel
-// cycles through the info screens every 15 s; 15 s after music starts it
-// goes to HagtAmp's display and stays there. A touch holds it for 15 s.
+// The screens form a ring: swiping past the last one comes back to the
+// first. With nothing playing for 15 s the panel cycles through the info
+// screens every 15 s; 15 s after music starts it goes to HagtAmp's display
+// and stays there. A touch holds it for 15 s.
 
 let playing = false, stateSince = Date.now(), lastTouch = 0, lastSwitch = Date.now();
+let index = 0, moving = false;
 const screens = () => [...screensEl.children];
-const current = () => Math.round(screensEl.scrollLeft / screensEl.clientWidth);
+const MOVE_MS = 380;
 
-function go(index) {
-  screensEl.scrollTo({ left: index * screensEl.clientWidth, behavior: 'smooth' });
-  lastSwitch = Date.now();
+// `offset` in screen widths, plus `dx` pixels of finger.
+function place(screen, offset, dx = 0, animated = false) {
+  screen.classList.add('shown');
+  screen.classList.toggle('moving', animated);
+  screen.style.transform = `translateX(calc(${offset * 100}% + ${dx}px))`;
 }
+
+function showOnly(...shown) {
+  for (const screen of screens()) {
+    if (shown.includes(screen)) continue;
+    screen.classList.remove('shown', 'moving');
+    screen.style.transform = '';
+  }
+}
+
+function settle(target) {
+  moving = true;
+  setTimeout(() => {
+    const changed = target !== index;
+    index = target;
+    const screen = screens()[index];
+    showOnly(screen);
+    place(screen, 0);
+    moving = false;
+    if (changed) { lastSwitch = Date.now(); flashDots(); }
+  }, MOVE_MS);
+}
+
+// Slides `target` in from the right (dir 1) or the left (dir -1).
+function slide(target, dir) {
+  const list = screens(), from = list[index], to = list[target];
+  if (target === index || moving) return;
+  showOnly(from, to);
+  place(from, 0);
+  place(to, dir);
+  to.getBoundingClientRect();  // start from there
+  place(from, -dir, 0, true);
+  place(to, 0, 0, true);
+  settle(target);
+}
+
+// The short way round the ring.
+function go(target) {
+  const n = screens().length, ahead = (target - index + n) % n;
+  slide(target, ahead <= n - ahead ? 1 : -1);
+}
+
+let startX = null, startTime = 0, dx = 0;
+const neighbor = dir => (index + dir + screens().length) % screens().length;
+
+screensEl.addEventListener('touchstart', e => {
+  if (moving || screens().length < 2) return;
+  startX = e.touches[0].clientX;
+  startTime = Date.now();
+  dx = 0;
+}, { passive: true });
+
+screensEl.addEventListener('touchmove', e => {
+  if (startX === null) return;
+  dx = e.touches[0].clientX - startX;
+  const dir = dx < 0 ? 1 : -1, list = screens(), next = list[neighbor(dir)];
+  showOnly(list[index], next);
+  place(list[index], 0, dx);
+  place(next, dir, dx);
+}, { passive: true });
+
+function release() {
+  if (startX === null) return;
+  startX = null;
+  if (dx === 0) return;
+  const dir = dx < 0 ? 1 : -1, list = screens(), target = neighbor(dir);
+  const fast = Math.abs(dx) / Math.max(1, Date.now() - startTime) > 0.4;
+  if (Math.abs(dx) > screensEl.clientWidth * 0.2 || (fast && Math.abs(dx) > 20)) {
+    place(list[index], -dir, 0, true);
+    place(list[target], 0, 0, true);
+    settle(target);
+  } else {
+    place(list[index], 0, 0, true);
+    place(list[target], dir, 0, true);
+    settle(index);
+  }
+}
+screensEl.addEventListener('touchend', release);
+screensEl.addEventListener('touchcancel', release);
 
 function setPlaying(now) {
   if (now !== playing) { playing = now; stateSince = Date.now(); }
@@ -428,11 +513,11 @@ function setPlaying(now) {
 
 setInterval(() => {
   const now = Date.now(), count = screens().length;
-  if (now - lastTouch < AUTO_DELAY || now - stateSince < AUTO_DELAY) return;
+  if (moving || now - lastTouch < AUTO_DELAY || now - stateSince < AUTO_DELAY) return;
   if (playing) {
-    if (current() !== 0) go(0);
+    if (index !== 0) go(0);
   } else if (count > 1 && now - lastSwitch >= AUTO_DELAY) {
-    go(current() % (count - 1) + 1);   // info screens only: 1 … count-1
+    slide(index % (count - 1) + 1, 1);   // info screens only (1 … count-1), forward
   }
 }, 1000);
 
@@ -443,20 +528,16 @@ for (const type of ['touchstart', 'touchend', 'pointerdown']) {
 const dots = document.getElementById('dots');
 let dotsTimer;
 function updateDots() {
-  const n = screens().length, i = current();
+  const n = screens().length;
   if (dots.children.length !== n) dots.innerHTML = '<i></i>'.repeat(n);
-  [...dots.children].forEach((d, k) => d.classList.toggle('on', k === i));
+  [...dots.children].forEach((d, k) => d.classList.toggle('on', k === index));
 }
-let lastIndex = 0;
-screensEl.addEventListener('scroll', () => {
-  const i = current();
-  if (i === lastIndex) return;
-  lastIndex = i;
+function flashDots() {
   updateDots();
   dots.classList.add('shown');
   clearTimeout(dotsTimer);
   dotsTimer = setTimeout(() => dots.classList.remove('shown'), 2000);
-}, { passive: true });
+}
 
 // ---------- Clock, layout ----------
 
@@ -466,8 +547,9 @@ function tick() {
 }
 setInterval(tick, 5000);
 tick();
-addEventListener('resize', () => { layoutMusic(); screensEl.scrollLeft = current() * screensEl.clientWidth; });
+addEventListener('resize', layoutMusic);
 layoutMusic();
+place(screens()[0], 0);
 updateDots();
 
 // ---------- Connection ----------
