@@ -28,7 +28,7 @@ node_exporter, Scrutiny ── HTTP ──┤
 
 ## Screens
 
-HagtAmp's display, a split-flap clock, the Mac, one screen per node_exporter, and the disks, in a ring: swipe either way. 15 s after music starts the panel goes to HagtAmp's display, 15 s after it stops or pauses to the clock, and stays there; a touch holds it for 15 s.
+HagtAmp's display, a split-flap clock, the Mac, one screen per node_exporter, and the disks, in a ring: swipe either way. When music starts the panel goes to HagtAmp's display, 15 s after it stops or pauses to the clock, and stays there; a touch holds it for 15 s.
 
 A disk in trouble (SMART or Scrutiny's thresholds failed, or Scrutiny's risk isn't "healthy") flashes the screen red and holds the disks screen for a minute, again every hour while it lasts; meanwhile the disks' dot is red and the clock names the disk instead of the date.
 

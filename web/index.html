@@ -452,9 +452,9 @@ function onFrame(buffer) {
 
 // ---------- Which screen ----------
 // The screens form a ring: swiping past the last one comes back to the
-// first. 15 s after music starts the panel goes to HagtAmp's display, 15 s
-// after it stops or pauses to the clock, and stays there. A touch holds it
-// for 15 s.
+// first. When music starts the panel goes to HagtAmp's display, 15 s after
+// it stops or pauses to the clock, and stays there. A touch holds it for
+// 15 s.
 
 let playing = false, stateSince = Date.now(), lastTouch = 0;
 
@@ -578,15 +578,20 @@ screensEl.addEventListener('touchend', release);
 screensEl.addEventListener('touchcancel', release);
 
 function setPlaying(now) {
-  if (now !== playing) { playing = now; stateSince = Date.now(); }
+  if (now === playing) return;
+  playing = now;
+  stateSince = Date.now();
+  goHome();
 }
 
-setInterval(() => {
+function goHome() {
   const now = Date.now();
-  if (moving || now < holdUntil || now - lastTouch < AUTO_DELAY || now - stateSince < AUTO_DELAY) return;
+  if (moving || now < holdUntil || now - lastTouch < AUTO_DELAY) return;
+  if (!playing && now - stateSince < AUTO_DELAY) return;  // a short pause stays with the music
   const home = screens().indexOf(playing ? music : clockScreen);
   if (index !== home) go(home);
-}, 1000);
+}
+setInterval(goHome, 1000);
 
 for (const type of ['touchstart', 'touchend', 'pointerdown']) {
   addEventListener(type, () => { lastTouch = Date.now(); }, { passive: true });
