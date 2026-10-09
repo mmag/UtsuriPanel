@@ -1,0 +1,13 @@
+{
+  "port": 26472,
+  "web": "web",
+  "hagtamp": "ws://127.0.0.1:24248",
+  "adb": "/opt/homebrew/bin/adb",
+  "app": "app.utsuripanel/.PanelActivity",
+  "nodes": [
+    { "name": "nas", "url": "http://192.168.1.10:9100/metrics" }
+  ],
+  "scrutiny": [
+    { "name": "nas", "url": "http://192.168.1.10:8080" }
+  ]
+}

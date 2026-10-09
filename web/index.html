@@ -1,0 +1,506 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>UtsuriPanel</title>
+<style>
+  /* Colors come from HagtAmp's skin (the `skin` message): the background and
+     meter track are its visualizer background and dots, severity steps and
+     lines its analyzer gradient and oscilloscope. Text stays neutral. */
+  :root {
+    --bg: #000000;
+    --surface: #0b0f14;
+    --track: #182129;
+    --ink: #e8ecf1;
+    --ink-2: #9aa4b2;
+    --muted: #5f6977;
+    --ok: #32BE10;
+    --warn: #DEA518;
+    --danger: #EF3110;
+    --line: #32BE10;
+    --line-2: #D6D6DE;
+  }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--ink);
+               font-family: Roboto, "Helvetica Neue", Arial, sans-serif;
+               -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
+
+  #screens { display: flex; height: 100%; overflow-x: auto; overflow-y: hidden;
+             scroll-snap-type: x mandatory; scrollbar-width: none; }
+  #screens::-webkit-scrollbar { display: none; }
+  .screen { flex: 0 0 100vw; height: 100vh; scroll-snap-align: start; scroll-snap-stop: always;
+            position: relative; overflow: hidden; box-sizing: border-box; }
+
+  /* Music: HagtAmp's display, whole screen pixels per skin pixel. */
+  #music { display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  #music canvas { image-rendering: pixelated; display: block; transition: opacity .3s; }
+  #music.offline canvas { opacity: .2; }
+  #music .notice { position: absolute; inset: 0; display: none; align-items: center; justify-content: center;
+                   color: var(--ink-2); font-size: 5vh; }
+  #music.offline .notice { display: flex; }
+
+  /* Info screens. */
+  .info { padding: 3.5vh 3.5vw 3vh; display: flex; flex-direction: column; gap: 2.5vh; }
+  .info header { display: flex; align-items: baseline; gap: 1.6vw; }
+  .info h1 { margin: 0; font-size: 6.5vh; font-weight: 500; }
+  .info .sub { color: var(--ink-2); font-size: 3.6vh; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .info .clock { font-size: 6.5vh; font-weight: 500; font-variant-numeric: tabular-nums; }
+  .grid { flex: 1; min-height: 0; display: grid; gap: 2.5vh 2.5vw; grid-template-columns: 1.1fr 1fr; }
+  .column { display: flex; flex-direction: column; gap: 2.5vh; min-height: 0; }
+  .tile { background: var(--surface); border-radius: 1.6vh; padding: 2.4vh 2vw; display: flex; flex-direction: column;
+          gap: 1.2vh; min-height: 0; }
+  .tile.grow { flex: 1; }
+  .label { color: var(--ink-2); font-size: 3.6vh; display: flex; justify-content: space-between; gap: 1vw; }
+  .label .aside { color: var(--muted); }
+  .hero-value { font-size: 19vh; font-weight: 500; line-height: .95; letter-spacing: -.02em; }
+  .value { font-size: 6.2vh; font-weight: 500; line-height: 1.05; }
+  .unit { font-size: .45em; font-weight: 400; color: var(--ink-2); margin-left: .15em; }
+  .note { color: var(--ink-2); font-size: 3.4vh; }
+  .row { display: flex; align-items: center; gap: 2vw; }
+  .row svg.spark { flex: 1; height: 6vh; min-height: 0; }
+  .stale { opacity: .45; }
+
+  .meter { height: 1.6vh; border-radius: .8vh; background: var(--track); overflow: hidden; }
+  .meter i { display: block; height: 100%; border-radius: .8vh; }
+
+  svg.spark { width: 100%; flex: 1; min-height: 6vh; display: block; overflow: visible; }
+  svg.spark path { fill: none; stroke-width: 2px; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+  svg.spark .area { stroke: none; fill: var(--line); fill-opacity: .1; }
+  svg.spark .line { stroke: var(--line); }
+  svg.spark .line-2 { stroke: var(--line-2); }
+
+  .cores { display: flex; align-items: flex-end; gap: .5vw; height: 7vh; }
+  .cores span { flex: 1; height: 100%; background: var(--track); border-radius: .6vh; display: flex; align-items: flex-end; overflow: hidden; }
+  .cores span.gap { margin-left: 1.2vw; }
+  .cores i { display: block; width: 100%; border-radius: .6vh; }
+
+  .key { display: inline-block; width: 2.6vh; height: .5vh; border-radius: .25vh; vertical-align: middle; margin-right: .6vw; }
+  .pair { display: flex; gap: 3vw; }
+  .pair > div { display: flex; flex-direction: column; gap: .4vh; }
+
+  .volumes { display: flex; flex-direction: column; gap: 2.2vh; }
+  .volume .top { display: flex; justify-content: space-between; align-items: baseline; font-size: 3.8vh; margin-bottom: .8vh; }
+  .volume .top b { font-weight: 500; }
+  .volume .bottom { color: var(--ink-2); font-size: 3.2vh; margin-top: .7vh; }
+  .status-icon { font-weight: 700; margin-right: .4vw; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 3.5vh; font-variant-numeric: tabular-nums; }
+  th { color: var(--muted); font-weight: 400; text-align: left; padding: 0 1vw 1vh; font-size: 3.1vh; }
+  td { padding: .9vh 1vw; border-top: 1px solid var(--track); white-space: nowrap; }
+  td.host { color: var(--ink-2); padding-top: 1.8vh; border-top: none; font-size: 3.2vh; }
+  td.num, th.num { text-align: right; }
+  td .dot { display: inline-block; width: 1.4vh; height: 1.4vh; border-radius: 50%; margin-right: .6vw; vertical-align: middle; }
+  td .dim { color: var(--muted); }
+
+  #dots { position: fixed; left: 50%; bottom: 1.6vh; transform: translateX(-50%); display: flex; gap: 1vw;
+          opacity: 0; transition: opacity .6s; pointer-events: none; }
+  #dots.shown { opacity: 1; }
+  #dots i { width: 1.4vh; height: 1.4vh; border-radius: 50%; background: var(--muted); }
+  #dots i.on { background: var(--ink); }
+</style>
+</head>
+<body>
+<div id="screens">
+  <section class="screen offline" id="music">
+    <canvas id="lcd" width="83" height="42"></canvas>
+    <canvas id="marquee" width="155" height="6"></canvas>
+    <div class="notice">HagtAmp не запущен</div>
+  </section>
+
+  <section class="screen info" id="mac">
+    <header><h1 data-f="name">Mac</h1><span class="sub" data-f="sub"></span><span class="clock"></span></header>
+    <div class="grid">
+      <div class="tile">
+        <div class="label"><span>Процессор</span><span class="aside" data-f="coresCaption"></span></div>
+        <div class="hero-value"><span data-f="cpu">–</span><span class="unit">%</span></div>
+        <svg class="spark" data-f="cpuSpark" viewBox="0 0 300 100" preserveAspectRatio="none"><path class="area"/><path class="line"/></svg>
+        <div class="cores" data-f="cores"></div>
+        <div class="note" data-f="load"></div>
+      </div>
+      <div class="column">
+        <div class="tile">
+          <div class="label"><span>Память</span><span class="aside" data-f="pressure"></span></div>
+          <div class="value" data-f="memory">–</div>
+          <div class="meter"><i data-f="memoryMeter"></i></div>
+        </div>
+        <div class="tile grow">
+          <div class="label"><span>Сеть</span></div>
+          <div class="pair">
+            <div><span class="note"><span class="key" style="background: var(--line)"></span>приём</span><span class="value" data-f="rx">–</span></div>
+            <div><span class="note"><span class="key" style="background: var(--line-2)"></span>передача</span><span class="value" data-f="tx">–</span></div>
+          </div>
+          <svg class="spark" data-f="netSpark" viewBox="0 0 300 100" preserveAspectRatio="none"><path class="area"/><path class="line"/><path class="line-2"/></svg>
+        </div>
+        <div class="tile">
+          <div class="label"><span>Диск</span><span class="aside" data-f="diskTotal"></span></div>
+          <div class="value" data-f="disk">–</div>
+          <div class="meter"><i data-f="diskMeter"></i></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="screen info" id="disks">
+    <header><h1>Диски</h1><span class="sub" data-f="sub">SMART из Scrutiny</span><span class="clock"></span></header>
+    <table>
+      <thead><tr><th>Диск</th><th>Модель</th><th class="num">Объём</th><th class="num">Темп.</th><th class="num">Наработка</th><th>Состояние</th></tr></thead>
+      <tbody data-f="rows"></tbody>
+    </table>
+  </section>
+</div>
+<div id="dots"></div>
+
+<template id="node-template">
+  <section class="screen info node">
+    <header><h1 data-f="name"></h1><span class="sub" data-f="sub"></span><span class="clock"></span></header>
+    <div class="grid">
+      <div class="column">
+        <div class="tile grow">
+          <div class="label"><span>Процессор</span><span class="aside" data-f="load"></span></div>
+          <div class="hero-value"><span data-f="cpu">–</span><span class="unit">%</span></div>
+          <svg class="spark" data-f="cpuSpark" viewBox="0 0 300 100" preserveAspectRatio="none"><path class="area"/><path class="line"/></svg>
+          <div class="cores" data-f="cores"></div>
+        </div>
+        <div class="tile">
+          <div class="label"><span>Температура</span><span class="aside" data-f="coreTemps"></span></div>
+          <div class="row">
+            <div class="value" data-f="temp">–</div>
+            <svg class="spark" data-f="tempSpark" viewBox="0 0 300 100" preserveAspectRatio="none"><path class="area"/><path class="line"/></svg>
+          </div>
+        </div>
+      </div>
+      <div class="column">
+        <div class="tile grow">
+          <div class="label"><span>Хранилище</span></div>
+          <div class="volumes" data-f="volumes"></div>
+        </div>
+        <div class="tile">
+          <div class="label"><span>Память</span><span class="aside" data-f="net"></span></div>
+          <div class="value" data-f="memory">–</div>
+          <div class="meter"><i data-f="memoryMeter"></i></div>
+        </div>
+      </div>
+    </div>
+  </section>
+</template>
+
+<script>
+// Errors show up in the daemon's log.
+addEventListener('error', e => fetch('/log?' + encodeURIComponent(`${e.message} @${e.lineno}`)));
+
+const HISTORY = 90;           // samples the daemon keeps
+const AUTO_DELAY = 15000;     // ms: idle time before the panel moves on its own
+
+// ---------- Formatting ----------
+
+const nf0 = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 });
+const nf1 = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 1 });
+const nf1fixed = new Intl.NumberFormat('ru-RU', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+const UNITS = ['Б', 'КБ', 'МБ', 'ГБ', 'ТБ', 'ПБ'];
+
+function size(n, base = 1000) {
+  let i = 0;
+  while (n >= base && i < UNITS.length - 1) { n /= base; i++; }
+  return { number: (n >= 100 || i === 0 ? nf0 : nf1).format(n), unit: UNITS[i] };
+}
+const sizeText = (n, base) => { const s = size(n, base); return `${s.number} ${s.unit}`; };
+const rateHtml = n => { const s = size(n); return `${s.number}<span class="unit">${s.unit}/с</span>`; };
+
+function duration(seconds) {
+  const d = Math.floor(seconds / 86400), h = Math.floor(seconds % 86400 / 3600), m = Math.floor(seconds % 3600 / 60);
+  return d ? `${d} д ${h} ч` : h ? `${h} ч ${m} мин` : `${m} мин`;
+}
+
+// Severity steps for meters: the skin's analyzer, green to red.
+const severity = (fraction, warn = .6, danger = .85) =>
+  fraction >= danger ? 'var(--danger)' : fraction >= warn ? 'var(--warn)' : 'var(--ok)';
+
+const STATUS = {
+  ok: { icon: '✓', text: 'норма', color: 'var(--ok)' },
+  warn: { icon: '!', text: 'внимание', color: 'var(--warn)' },
+  fail: { icon: '✕', text: 'сбой', color: 'var(--danger)' },
+};
+const statusHtml = s => `<span class="status-icon" style="color:${STATUS[s].color}">${STATUS[s].icon}</span>${STATUS[s].text}`;
+
+// ---------- Small renderers ----------
+
+const field = (root, name) => root.querySelector(`[data-f="${name}"]`);
+function set(root, name, html) { const el = field(root, name); if (el && el.innerHTML !== html) el.innerHTML = html; }
+
+function meter(el, fraction, color) {
+  el.style.width = `${Math.max(0, Math.min(1, fraction)) * 100}%`;
+  el.style.background = color;
+}
+
+// Right-aligned, so a short history grows in from the right.
+function sparkPath(values, min, max, w = 300, h = 100) {
+  if (values.length < 2) return '';
+  const step = w / (HISTORY - 1), x0 = w - (values.length - 1) * step, span = max - min || 1;
+  return values.map((v, i) => `${i ? 'L' : 'M'}${(x0 + i * step).toFixed(1)},${(h - (Math.min(max, Math.max(min, v)) - min) / span * h).toFixed(1)}`).join('');
+}
+function spark(svg, series, min, max) {
+  const paths = svg.querySelectorAll('.line, .line-2');
+  series.forEach((values, i) => paths[i].setAttribute('d', sparkPath(values, min, max)));
+  const first = sparkPath(series[0], min, max);
+  svg.querySelector('.area').setAttribute('d', first ? `${first}L300,100L${(300 - (series[0].length - 1) * 300 / (HISTORY - 1)).toFixed(1)},100Z` : '');
+}
+
+function cores(el, values, kinds = []) {
+  if (el.children.length !== values.length) {
+    el.innerHTML = values.map((_, i) => `<span class="${i && kinds[i] !== kinds[i - 1] ? 'gap' : ''}"><i></i></span>`).join('');
+  }
+  values.forEach((v, i) => {
+    const bar = el.children[i].firstChild;
+    bar.style.height = `${Math.max(2, v)}%`;
+    bar.style.background = severity(v / 100, .7, .9);
+  });
+}
+
+// ---------- Screens ----------
+
+const screensEl = document.getElementById('screens');
+const music = document.getElementById('music');
+const musicNotice = music.querySelector('.notice');
+const macScreen = document.getElementById('mac');
+const disksScreen = document.getElementById('disks');
+const nodeScreens = {};
+
+function renderMac(m) {
+  set(macScreen, 'name', m.name);
+  const battery = m.battery ? ` · батарея ${nf0.format(m.battery.percent)} %${m.battery.charging ? ', заряжается' : ''}` : '';
+  set(macScreen, 'sub', `аптайм ${duration(m.uptime)}${battery}`);
+  set(macScreen, 'cpu', nf0.format(m.cpu));
+  spark(field(macScreen, 'cpuSpark'), [m.cpuHistory], 0, 100);
+  const e = m.coreKinds.filter(k => k === 'e').length;
+  set(macScreen, 'coresCaption', e ? `${e} E + ${m.coreKinds.length - e} P` : `${m.cores.length} ядер`);
+  cores(field(macScreen, 'cores'), m.cores, m.coreKinds);
+  set(macScreen, 'load', `нагрузка ${m.load.map(v => nf1.format(v)).join(' · ')}`);
+
+  const memory = m.memory.used / m.memory.total;
+  set(macScreen, 'memory', `${nf1.format(m.memory.used / 2 ** 30)}<span class="unit">из ${nf0.format(m.memory.total / 2 ** 30)} ГБ</span>`);
+  set(macScreen, 'pressure', { normal: 'давление в норме', warning: 'давление повышено', critical: 'давление критическое' }[m.memory.pressure]);
+  meter(field(macScreen, 'memoryMeter'), memory, { normal: 'var(--ok)', warning: 'var(--warn)', critical: 'var(--danger)' }[m.memory.pressure]);
+
+  set(macScreen, 'rx', rateHtml(m.net.rx));
+  set(macScreen, 'tx', rateHtml(m.net.tx));
+  const top = Math.max(16384, ...m.net.rxHistory, ...m.net.txHistory);
+  spark(field(macScreen, 'netSpark'), [m.net.rxHistory, m.net.txHistory], 0, top);
+
+  const used = 1 - m.disk.free / m.disk.total, free = size(m.disk.free);
+  set(macScreen, 'disk', `${free.number}<span class="unit">${free.unit} свободно</span>`);
+  set(macScreen, 'diskTotal', `из ${sizeText(m.disk.total)}`);
+  meter(field(macScreen, 'diskMeter'), used, severity(used, .8, .92));
+}
+
+function nodeScreen(name) {
+  if (!nodeScreens[name]) {
+    const screen = document.getElementById('node-template').content.firstElementChild.cloneNode(true);
+    screensEl.insertBefore(screen, disksScreen);
+    nodeScreens[name] = screen;
+    updateDots();
+  }
+  return nodeScreens[name];
+}
+
+function raidHtml(r) {
+  if (!r) return '';
+  const status = r.failed > 0 || r.active < r.required || r.state === 'inactive' ? 'fail'
+    : r.state === 'resync' || r.state === 'recovering' ? 'warn' : 'ok';
+  const progress = status === 'warn' ? ` · ${r.state === 'resync' ? 'синхронизация' : 'восстановление'} ${nf0.format(r.synced * 100)} %` : '';
+  return `<span><span class="status-icon" style="color:${STATUS[status].color}">${STATUS[status].icon}</span>${r.device} · ${r.active}/${r.required}${progress}</span>`;
+}
+
+function renderNode(m) {
+  const screen = nodeScreen(m.name);
+  screen.querySelector('.grid').classList.toggle('stale', !m.ok);
+  set(screen, 'name', m.name);
+  set(screen, 'sub', m.ok
+    ? [m.host, m.os, m.uptime != null ? `аптайм ${duration(m.uptime)}` : ''].filter(Boolean).join(' · ')
+    : `<span style="color:var(--warn)">!</span> нет связи · ${m.host}`);
+  set(screen, 'cpu', m.cpu != null ? nf0.format(m.cpu) : '–');
+  spark(field(screen, 'cpuSpark'), [m.cpuHistory], 0, 100);
+  cores(field(screen, 'cores'), m.cores);
+  set(screen, 'load', m.load.length ? `нагрузка ${m.load.map(v => nf1.format(v)).join(' · ')}` : '');
+
+  const t = m.temps.package;
+  set(screen, 'temp', t != null ? `${nf0.format(t)}<span class="unit">°C</span>` : '–');
+  set(screen, 'coreTemps', m.temps.cores.length ? `ядра ${m.temps.cores.map(v => nf0.format(v)).join(' · ')}` : '');
+  if (m.tempHistory.length) {
+    spark(field(screen, 'tempSpark'), [m.tempHistory], Math.min(...m.tempHistory) - 3, Math.max(...m.tempHistory) + 3);
+  }
+
+  const raids = Object.fromEntries(m.raid.map(r => [r.device, r]));
+  set(screen, 'volumes', m.filesystems.map(fs => {
+    const used = 1 - fs.available / fs.size;
+    return `<div class="volume">
+      <div class="top"><b>${fs.mount}</b>${raidHtml(raids[fs.raid])}</div>
+      <div class="meter"><i style="width:${(used * 100).toFixed(1)}%;background:${severity(used, .8, .92)}"></i></div>
+      <div class="bottom">свободно ${sizeText(fs.available)} из ${sizeText(fs.size)}</div>
+    </div>`;
+  }).join(''));
+
+  if (m.memory) {
+    const used = m.memory.total - m.memory.available;
+    set(screen, 'memory', `${nf1.format(used / 2 ** 30)}<span class="unit">из ${nf1.format(m.memory.total / 2 ** 30)} ГБ</span>`);
+    meter(field(screen, 'memoryMeter'), used / m.memory.total, severity(used / m.memory.total, .8, .92));
+  }
+  set(screen, 'net', m.net ? `↓ ${sizeText(m.net.rx)}/с · ↑ ${sizeText(m.net.tx)}/с` : '');
+}
+
+// Hard disks run warmer than they should past ~45 °C, SSDs past ~60 °C.
+function tempDot(d) {
+  if (d.temp == null) return '';
+  const [warn, danger] = d.rotational ? [45, 55] : [60, 70];
+  const color = d.temp >= danger ? 'var(--danger)' : d.temp >= warn ? 'var(--warn)' : 'var(--ok)';
+  return `<span class="dot" style="background:${color}"></span>${nf0.format(d.temp)} °C`;
+}
+
+function renderDisks(m) {
+  const time = iso => iso ? new Date(iso).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) : '–';
+  set(disksScreen, 'sub', 'SMART из Scrutiny, данные на ' + m.hosts.map(h =>
+    `${h.name} ${time(h.disks.map(d => d.collected).filter(Boolean).sort().pop())}`).join(', '));
+  set(disksScreen, 'rows', m.hosts.map(h => {
+    const head = `<tr><td class="host" colspan="6">${h.name}${h.ok ? '' : ' · <span style="color:var(--warn)">!</span> Scrutiny не отвечает'}</td></tr>`;
+    return head + h.disks.map(d => `<tr${h.ok ? '' : ' class="stale"'}>
+      <td>${d.device}</td>
+      <td>${d.model}</td>
+      <td class="num">${sizeText(d.capacity)}</td>
+      <td class="num">${tempDot(d)}</td>
+      <td class="num">${d.hours != null ? `${nf1fixed.format(d.hours / 8766)} <span class="dim">года</span>` : '–'}</td>
+      <td>${statusHtml(d.status)}</td>
+    </tr>`).join('');
+  }).join(''));
+}
+
+function applySkin(s) {
+  const c = s.visColors, root = document.documentElement.style;
+  root.setProperty('--bg', c[0]);
+  root.setProperty('--track', c[1]);
+  root.setProperty('--danger', c[2]);
+  root.setProperty('--warn', c[8]);
+  root.setProperty('--ok', c[12]);
+  root.setProperty('--line', c[12]);
+  root.setProperty('--line-2', c[19]);
+}
+
+// ---------- HagtAmp's display ----------
+
+const lcd = document.getElementById('lcd'), marquee = document.getElementById('marquee');
+const canvases = { 1: lcd, 2: marquee };
+
+function layoutMusic() {
+  const dpr = devicePixelRatio, w = innerWidth * dpr, h = innerHeight * dpr;
+  const gap = Math.round(h * 0.04);
+  const sm = Math.floor(w * 0.97 / marquee.width);
+  const sl = Math.min(Math.floor(w * 0.97 / lcd.width), Math.floor((h * 0.96 - gap - marquee.height * sm) / lcd.height));
+  for (const [c, s] of [[lcd, sl], [marquee, sm]]) {
+    c.style.width = c.width * s / dpr + 'px';
+    c.style.height = c.height * s / dpr + 'px';
+  }
+  marquee.style.marginTop = gap / dpr + 'px';
+}
+
+function onFrame(buffer) {
+  const head = new DataView(buffer), c = canvases[head.getUint8(0)];
+  if (!c) return;
+  const w = head.getUint8(1), h = head.getUint8(2);
+  if (c.width !== w || c.height !== h) { c.width = w; c.height = h; layoutMusic(); }
+  c.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(buffer, 8, w * h * 4), w, h), 0, 0);
+}
+
+// ---------- Which screen ----------
+// Swipes move between screens. With nothing playing for 15 s the panel
+// cycles through the info screens every 15 s; 15 s after music starts it
+// goes to HagtAmp's display and stays there. A touch holds it for 15 s.
+
+let playing = false, stateSince = Date.now(), lastTouch = 0, lastSwitch = Date.now();
+const screens = () => [...screensEl.children];
+const current = () => Math.round(screensEl.scrollLeft / screensEl.clientWidth);
+
+function go(index) {
+  screensEl.scrollTo({ left: index * screensEl.clientWidth, behavior: 'smooth' });
+  lastSwitch = Date.now();
+}
+
+function setPlaying(now) {
+  if (now !== playing) { playing = now; stateSince = Date.now(); }
+}
+
+setInterval(() => {
+  const now = Date.now(), count = screens().length;
+  if (now - lastTouch < AUTO_DELAY || now - stateSince < AUTO_DELAY) return;
+  if (playing) {
+    if (current() !== 0) go(0);
+  } else if (count > 1 && now - lastSwitch >= AUTO_DELAY) {
+    go(current() % (count - 1) + 1);   // info screens only: 1 … count-1
+  }
+}, 1000);
+
+for (const type of ['touchstart', 'touchend', 'pointerdown']) {
+  addEventListener(type, () => { lastTouch = lastSwitch = Date.now(); }, { passive: true });
+}
+
+const dots = document.getElementById('dots');
+let dotsTimer;
+function updateDots() {
+  const n = screens().length, i = current();
+  if (dots.children.length !== n) dots.innerHTML = '<i></i>'.repeat(n);
+  [...dots.children].forEach((d, k) => d.classList.toggle('on', k === i));
+}
+let lastIndex = 0;
+screensEl.addEventListener('scroll', () => {
+  const i = current();
+  if (i === lastIndex) return;
+  lastIndex = i;
+  updateDots();
+  dots.classList.add('shown');
+  clearTimeout(dotsTimer);
+  dotsTimer = setTimeout(() => dots.classList.remove('shown'), 2000);
+}, { passive: true });
+
+// ---------- Clock, layout ----------
+
+function tick() {
+  const time = new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+  document.querySelectorAll('.clock').forEach(el => { if (el.textContent !== time) el.textContent = time; });
+}
+setInterval(tick, 5000);
+tick();
+addEventListener('resize', () => { layoutMusic(); screensEl.scrollLeft = current() * screensEl.clientWidth; });
+layoutMusic();
+updateDots();
+
+// ---------- Connection ----------
+
+let retry = 1000;
+function connect() {
+  const ws = new WebSocket(`ws://${location.host}/ws`);
+  ws.binaryType = 'arraybuffer';
+  ws.onopen = () => { retry = 1000; };
+  ws.onmessage = e => {
+    if (typeof e.data !== 'string') return onFrame(e.data);
+    const m = JSON.parse(e.data);
+    switch (m.type) {
+      case 'skin': applySkin(m); break;
+      case 'status':
+        musicNotice.textContent = 'HagtAmp не запущен';
+        music.classList.toggle('offline', !!m.offline);
+        setPlaying(m.state === 'playing' && !m.offline);
+        break;
+      case 'mac': renderMac(m); break;
+      case 'node': renderNode(m); break;
+      case 'disks': renderDisks(m); break;
+    }
+  };
+  ws.onclose = () => {
+    musicNotice.textContent = 'Нет связи с Mac';
+    music.classList.add('offline');
+    setPlaying(false);
+    setTimeout(connect, retry);
+    retry = Math.min(retry * 2, 5000);
+  };
+}
+connect();
+</script>
+</body>
+</html>

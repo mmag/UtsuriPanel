@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- An LCD with a green analyzer. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+    <path android:fillColor="#2B2F45" android:pathData="M4,8h40a2,2 0 0 1 2,2v28a2,2 0 0 1 -2,2h-40a2,2 0 0 1 -2,-2v-28a2,2 0 0 1 2,-2z" />
+    <path android:fillColor="#000000" android:pathData="M7,12h34v24h-34z" />
+    <path android:fillColor="#29CE10" android:pathData="M10,28h3v5h-3zM15,22h3v11h-3zM20,17h3v16h-3zM25,24h3v9h-3zM30,20h3v13h-3zM35,27h3v6h-3z" />
+</vector>

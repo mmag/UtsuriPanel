@@ -1,0 +1,8 @@
+.DS_Store
+daemon/.build/
+android/build/
+# Your servers; config.example.json shows the format.
+config.json
+# The first experiments (visualizer frames rendered offline).
+prototype/
+.claude/settings.local.json
