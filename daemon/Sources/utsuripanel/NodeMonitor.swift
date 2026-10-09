@@ -102,7 +102,7 @@ final class NodeMonitor {
         let message = NodeMessage(
             name: source.name, host: source.url.host ?? "", ok: true, error: nil,
             os: metrics.all("node_os_info").first?.labels["pretty_name"],
-            cpu: cpu, cpuHistory: cpuHistory, cores: cores, temps: temps, tempHistory: tempHistory,
+            cpu: cpu.map(round1), cpuHistory: cpuHistory, cores: cores.map(round1), temps: temps, tempHistory: tempHistory,
             load: ["node_load1", "node_load5", "node_load15"].compactMap { metrics.value($0) },
             memory: memory,
             uptime: metrics.value("node_boot_time_seconds").map { (metrics.value("node_time_seconds") ?? Date().timeIntervalSince1970) - $0 },

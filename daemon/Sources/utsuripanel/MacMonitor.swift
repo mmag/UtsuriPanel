@@ -73,7 +73,7 @@ final class MacMonitor {
         append(tx, to: &txHistory)
         let efficiency = sysctlInt("hw.perflevel1.logicalcpu")
         hub.publish("mac", MacMessage(
-            name: name, cpu: cpu, cpuHistory: cpuHistory, cores: cores,
+            name: name, cpu: round1(cpu), cpuHistory: cpuHistory, cores: cores.map(round1),
             // Apple silicon numbers its efficiency cores first.
             coreKinds: cores.indices.map { $0 < efficiency ? "e" : "p" },
             memory: memory(), net: .init(rx: rx, tx: tx, rxHistory: rxHistory, txHistory: txHistory),

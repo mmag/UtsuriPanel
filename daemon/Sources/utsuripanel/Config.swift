@@ -38,9 +38,14 @@ func log(_ message: String) {
     print("\(stampFormatter.string(from: Date())) \(message)")
 }
 
+/// One decimal is all the panel shows, and keeps the messages small.
+func round1(_ value: Double) -> Double {
+    (value * 10).rounded() / 10
+}
+
 /// Keeps the last `limit` values.
 func append(_ value: Double, to history: inout [Double], limit: Int = 90) {
-    history.append(value)
+    history.append(round1(value))
     if history.count > limit { history.removeFirst(history.count - limit) }
 }
 

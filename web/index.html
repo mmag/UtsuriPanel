@@ -554,9 +554,12 @@ updateDots();
 
 // ---------- Connection ----------
 
-let retry = 1000;
+// Connected only while the screen is on: on again, the daemon sends the
+// latest of everything (histories included), never a backlog.
+let retry = 1000, ws = null;
 function connect() {
-  const ws = new WebSocket(`ws://${location.host}/ws`);
+  if (ws || document.hidden) return;
+  ws = new WebSocket(`ws://${location.host}/ws`);
   ws.binaryType = 'arraybuffer';
   ws.onopen = () => { retry = 1000; };
   ws.onmessage = e => {
@@ -575,6 +578,7 @@ function connect() {
     }
   };
   ws.onclose = () => {
+    ws = null;
     musicNotice.textContent = 'Нет связи с Mac';
     music.classList.add('offline');
     setPlaying(false);
@@ -582,6 +586,14 @@ function connect() {
     retry = Math.min(retry * 2, 5000);
   };
 }
+
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) return connect();
+  if (!ws) return;
+  ws.onclose = null;
+  ws.close();
+  ws = null;
+});
 connect();
 </script>
 </body>

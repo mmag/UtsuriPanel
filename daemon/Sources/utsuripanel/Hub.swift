@@ -11,7 +11,7 @@ final class Hub {
     func add(_ panel: PanelConnection) {
         dispatchPrecondition(condition: .onQueue(queue))
         panels[ObjectIdentifier(panel)] = panel
-        for message in latest { panel.send(text: message.data) }
+        for message in latest { panel.send(text: message.data, key: message.key) }
         for type in latestFrames.keys.sorted() { panel.send(binary: latestFrames[type]!, droppable: false) }
         log("panel connected (\(panels.count))")
         let count = panels.count
@@ -35,7 +35,7 @@ final class Hub {
             } else {
                 latest.append((key, data))
             }
-            for panel in panels.values { panel.send(text: data) }
+            for panel in panels.values { panel.send(text: data, key: key) }
         }
     }
 

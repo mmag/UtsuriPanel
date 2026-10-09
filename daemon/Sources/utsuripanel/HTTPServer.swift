@@ -44,6 +44,7 @@ final class PanelConnection {
     private let hub: Hub
     private var buffer = Data()
     private var unsent = 0
+    private var held: [(key: String, data: Data)] = []
     private var open = true
 
     init(_ connection: NWConnection, webRoot: URL, hub: Hub) {
@@ -143,10 +144,19 @@ final class PanelConnection {
         }
     }
 
-    func send(text: Data) {
-        send(WebSocketFrame.encode(opcode: 0x1, payload: text))
+    /// While the panel isn't reading (its screen is off, say), only the
+    /// latest message of each `key` waits for it, so it never gets a backlog
+    /// to play through.
+    func send(text: Data, key: String) {
+        guard unsent > 4 else { return send(WebSocketFrame.encode(opcode: 0x1, payload: text)) }
+        if let index = held.firstIndex(where: { $0.key == key }) {
+            held[index].data = text
+        } else {
+            held.append((key, text))
+        }
     }
 
+    /// Frames a panel that's behind skips.
     func send(binary: Data, droppable: Bool) {
         if droppable && unsent > 4 { return }
         send(WebSocketFrame.encode(opcode: 0x2, payload: binary))
@@ -157,7 +167,12 @@ final class PanelConnection {
         unsent += 1
         connection.send(content: data, completion: .contentProcessed { [self] error in
             unsent -= 1
-            if error != nil { close() }
+            if error != nil { return close() }
+            if unsent == 0 && !held.isEmpty {
+                let waiting = held
+                held = []
+                for message in waiting { send(WebSocketFrame.encode(opcode: 0x1, payload: message.data)) }
+            }
         })
     }
 
