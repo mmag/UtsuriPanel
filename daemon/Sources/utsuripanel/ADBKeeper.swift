@@ -69,6 +69,14 @@ final class ADBKeeper {
             log("phone \(serial): port \(port) reversed, panel opened")
         }
 
+        // Offline, Google apps' token refreshes end in Play services' sign-in
+        // error screens ("not connected to a network") over the panel.
+        if let focus = run(["-s", serial, "shell", "dumpsys window windows | grep mCurrentFocus"]),
+           focus.contains("com.google.android.gms/"), focus.contains(".auth.") || focus.contains(".signin.") {
+            _ = run(["-s", serial, "shell", "am", "start", "-n", app])
+            log("phone \(serial): a Google sign-in screen covered the panel, panel brought back")
+        }
+
         checks += 1
         guard appeared || checks % 6 == 0 else { return }
         let battery = run(["-s", serial, "shell", "dumpsys", "battery"]).map(Self.battery)
