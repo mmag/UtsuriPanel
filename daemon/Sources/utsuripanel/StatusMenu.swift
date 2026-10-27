@@ -80,7 +80,6 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         menu.addItem(.separator())
         action("Обновить панель на телефоне", #selector(reloadPanel), key: "r", enabled: status.phone != nil)
         action("Открыть панель в браузере", #selector(openInBrowser))
-        action("Показать лог", #selector(showLog))
         menu.addItem(.separator())
         action("Выйти", #selector(quit), key: "q")
     }
@@ -114,10 +113,6 @@ final class StatusMenu: NSObject, NSMenuDelegate {
 
     @objc private func openInBrowser() {
         NSWorkspace.shared.open(URL(string: "http://localhost:\(config.port)/")!)
-    }
-
-    @objc private func showLog() {
-        NSWorkspace.shared.open(URL(fileURLWithPath: NSHomeDirectory() + "/Library/Logs/utsuripanel.log"))
     }
 
     @objc private func quit() {

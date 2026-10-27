@@ -1,7 +1,6 @@
 #!/bin/zsh
 # Builds UtsuriPanel.app into /Applications and (re)installs its LaunchAgent:
 # started at login, restarted if it crashes (not after Quit).
-# Log: ~/Library/Logs/utsuripanel.log.
 #   install.sh             build, install, (re)start
 #   install.sh --uninstall stop it, remove the LaunchAgent and the app
 set -euo pipefail
@@ -49,8 +48,6 @@ cat > $plist <<EOF
     <key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict>
     <key>LimitLoadToSessionType</key><string>Aqua</string>
     <key>ProcessType</key><string>Interactive</string>
-    <key>StandardOutPath</key><string>$HOME/Library/Logs/utsuripanel.log</string>
-    <key>StandardErrorPath</key><string>$HOME/Library/Logs/utsuripanel.log</string>
 </dict>
 </plist>
 EOF

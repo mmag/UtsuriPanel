@@ -20,7 +20,8 @@ node_exporter, Scrutiny ── HTTP ──┤
   - serves the page and the panel WebSocket, relaying HagtAmp's feed;
   - samples the Mac (CPU per core, memory, network, disk, battery);
   - polls node_exporter (CPU, temperatures, md RAID, filesystems, network) and Scrutiny (disks);
-  - whenever the phone shows up without the port reversed (plugged in, rebooted), reverses it and opens the app.
+  - whenever the phone shows up without the port reversed (plugged in, rebooted), reverses it and opens the app;
+  - restarts the app once it holds over 300 MB: the page leaks, and a phone out of memory drains faster than USB charges it.
 
   The menu shows the phone and its battery, the player, servers and disks, and reloads the panel.
 - `web/index.html` — the panel: swipeable screens, rendered from the WebSocket messages.
@@ -37,7 +38,7 @@ A disk in trouble (SMART or Scrutiny's thresholds failed, or Scrutiny's risk isn
 1. **HagtAmp**: Preferences → General → Visualizer feed.
 2. **Servers**: [node_exporter](https://github.com/prometheus/node_exporter) and/or [Scrutiny](https://github.com/AnalogJ/scrutiny) reachable from the Mac.
 3. **Phone** (Android 7.1+): enable USB debugging and allow the Mac. On Android 7–9 pick Chrome as the WebView (Developer options → WebView implementation, or `adb shell cmd webviewupdate set-webview-implementation com.android.chrome`); a ROM's own WebView may be too old. Then `android/build.sh --install` (needs the Android SDK; uses the debug key).
-4. **Mac**: `daemon/install.sh` builds `/Applications/UtsuriPanel.app`, installs its LaunchAgent (started at login, restarted if it crashes) and creates `config.json` from `config.example.json` on the first run. Put your servers in it and run `install.sh` again. Allow it on the local network when macOS asks. Log: `~/Library/Logs/utsuripanel.log`; `install.sh --uninstall` removes it all.
+4. **Mac**: `daemon/install.sh` builds `/Applications/UtsuriPanel.app`, installs its LaunchAgent (started at login, restarted if it crashes) and creates `config.json` from `config.example.json` on the first run. Put your servers in it and run `install.sh` again. Allow it on the local network when macOS asks. `install.sh --uninstall` removes it all.
 
 ## config.json
 
